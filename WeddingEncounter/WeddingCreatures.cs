@@ -37,7 +37,7 @@ public class LoadWeddingCreatures
     {
         return new Creature(new ModdedIllustration("PhoenixAssets/HungryDemon.png"),
             "Hungry Demon",
-            new Trait[] { Trait.Chaotic, Trait.Evil, Trait.Fiend, Trait.Demon },
+            new Trait[] { Trait.Chaotic, Trait.Demon, Trait.Evil, Trait.Fiend },
             2, 5, 4,
             new Defenses(17, 11, 8, 5),
             36,
@@ -51,6 +51,32 @@ public class LoadWeddingCreatures
                     .WithWeaponProperties(new WeaponProperties("1d8", DamageKind.Piercing)))
                 .AddQEffect(QEffect.DamageWeakness(Trait.ColdIron, 3))
                 .AddQEffect(QEffect.MonsterGrab())
+                .AddQEffect(new QEffect("Delusional Nourishment", "When a creature adjacent to the hungry demon drinks a potion or elixir, the demon can use its reaction to grant itself the benefits of the item consumed.")
+                {
+                    StateCheck = async (qf) =>
+                    {
+                        foreach (Creature c in qf.Owner.Battle.AllCreatures)
+                        {
+                            if (c.IsAdjacentTo(qf.Owner))
+                            {
+                                c.AddQEffect(new QEffect()
+                                {
+                                    AfterYouTakeAction = async delegate (QEffect qf2, CombatAction action)
+                                    {
+                                        if (action.ActionId == ActionId.Drink && action.Item != null)
+                                        {
+                                            if ((!qf.Owner.HasEffect(QEffectId.Sickened)) && await qf.Owner.AskToUseReaction("A creature is drinking a " + action.Item.Name + "! Use Delusional Nourishment to gain benefits?"))
+                                            {
+                                                action.Item!.WhenYouDrink.Invoke(CombatAction.CreateSimple(qf.Owner, "Delusional Nourishment"), qf.Owner);
+                                            }
+                                        }
+                                    },
+                                    ExpiresAt = ExpirationCondition.Ephemeral
+                                });
+                            }
+                        }
+                    }
+                })
                 .AddQEffect(new QEffect()
                 {
                     ProvideMainAction = delegate (QEffect qf)
@@ -101,13 +127,18 @@ public class LoadWeddingCreatures
                         Trait.BypassesOutOfCombat,
                         Trait.Manipulate,
                         Trait.Basic
-                }, "Have a slice of cake, restoring 3d8+10 Hit Points. Can only be used once in the encounter.", Target.Touch().WithAdditionalConditionOnTargetCreature((self, target) => self.HasEffect(QEffectId.Sickened) ? Usability.NotUsable("sickened") : Usability.Usable))
+                }, "Have a slice of cake, restoring 3d8+10 Hit Points. Can only be used once in the encounter.", Target.Touch())
                     .WithActionCost(1)
                     .WithEffectOnEachTarget(async (spell, caster, target, result) =>
                     {
                         target.RemoveAllQEffects((QEffect qf) => qf.Id == CakeEatTarget);
                         await caster.HealAsync(DiceFormula.FromText("3d8+10", "Wedding Cake"), spell);
                     })).WithPossibilityGroup("Interactions");
+            }, (self, target) =>
+            {
+                Item item = Items.CreateNew(ItemName.ModerateHealingPotion);
+                string text3 = item.CannotDrinkBecause?.Invoke(self);
+                return (text3 == null) ? Usability.Usable : self.HasEffect(QEffectId.Sickened) ? Usability.NotUsable("You're sickened.") : Usability.NotUsable(text3);
             }));
     }
 
@@ -115,7 +146,7 @@ public class LoadWeddingCreatures
     {
         return new Creature(new ModdedIllustration("PhoenixAssets/UnbreakableFriendshipAcolyte.png"),
             "Acolyte of the Unbreakable Friendship",
-            new Trait[] { Trait.Cleric, Trait.Human, Trait.Humanoid, Trait.Good },
+            new Trait[] { Trait.Cleric, Trait.Good, Trait.Human, Trait.Humanoid },
             1, 7, 5,
             new Defenses(15, 2, 5, 9),
             16, new Abilities(1, 2, -1, 2, 4, 1),
@@ -147,16 +178,20 @@ public class LoadWeddingCreatures
     {
         return new Creature(new ModdedIllustration("PhoenixAssets/RainbowElemental.png"),
             "Rainbow Elemental",
-            new Trait[] { Trait.Small, Trait.Elemental, Trait.Water, Trait.Light, Trait.NoPhysicalUnarmedAttack },
+            new Trait[] { Trait.Elemental, Trait.Light, Trait.NoPhysicalUnarmedAttack, Trait.Small, Trait.Water },
             1, 3, 5,
             new Defenses(16, 4, 8, 7),
             16,
             new Abilities(1, 3, 0, 0, 0, 3),
-            new Skills(thievery: 8))
+            new Skills(nature: 5, thievery: 8))
                 .WithCreatureId(RainbowElementalId)
                 .WithCharacteristics(speaksCommon: false, hasASkeleton: false)
                 .WithTactics(Tactic.Standard)
                 .WithProficiency(Trait.Weapon, Proficiency.Expert)
+                .AddQEffect(QEffect.DamageImmunity(DamageKind.Bleed))
+                .AddQEffect(QEffect.DamageImmunity(DamageKind.Poison))
+                .AddQEffect(QEffect.ImmunityToCondition(QEffectId.Paralyzed))
+                .AddQEffect(QEffect.TraitImmunity(Trait.Sleep))
                 .AddQEffect(QEffect.Flying())
                 .AddQEffect(new QEffect()
                 {
@@ -173,18 +208,15 @@ public class LoadWeddingCreatures
                 {
                     ProvideMainAction = delegate (QEffect qf)
                     {
-                        return new ActionPossibility(new CombatAction(qf.Owner, IllustrationName.ColorSpray, "Unifying Light", new Trait[] { Trait.Evocation, Trait.Light }, "The elemental glows brightly and encouragingly, giving allies in a 30-foot emanation 2 temporary Hit Points. The elemental can't use Unifying Light again for 1d4 rounds.",
-                                Target.ThirtyFootEmanation())
+                        return new ActionPossibility(new CombatAction(qf.Owner, IllustrationName.ColorSpray, "Unifying Light", new Trait[] { Trait.Evocation, Trait.Light, Trait.Visual }, "The elemental glows brightly and encouragingly, giving allies in a 30-foot emanation 2 temporary Hit Points. The elemental can't use Unifying Light again for 1d4 rounds.",
+                                Target.AlliesOnlyEmanation(3))
                             .WithActionCost(2)
                             .WithSoundEffect(SfxName.MinorHealing)
                             .WithProjectileCone(new VfxStyle(20, ProjectileKind.ColorSpray, IllustrationName.ColorSpray))
                             .WithGoodness((tg, self, foe) => foe.FriendOfAndNotSelf(self) ? 0 : 2)
                             .WithEffectOnEachTarget(async (spell, caster, target, result) =>
                             {
-                                if (target.FriendOfAndNotSelf(caster))
-                                {
-                                    target.GainTemporaryHP(2);
-                                }
+                                target.GainTemporaryHP(2);
                             })
                             .WithEffectOnSelf(async (self) =>
                             {
@@ -199,7 +231,7 @@ public class LoadWeddingCreatures
     {
         return new Creature(new ModdedIllustration("PhoenixAssets/Bride.png"),
             "Bride",
-            new Trait[] { Trait.Human, Trait.Humanoid, Trait.Good },
+            new Trait[] { Trait.Good, Trait.Human, Trait.Humanoid },
             0, 3, 5,
             new Defenses(13, 3, 5, 6),
             14,

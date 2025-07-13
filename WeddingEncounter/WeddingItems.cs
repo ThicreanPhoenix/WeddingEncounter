@@ -12,12 +12,6 @@ namespace Dawnsbury.Mods.Phoenix.WeddingEncounter;
 
 public class LoadWeddingItems
 {
-    /*
-    public static ItemName BellMace = ModManager.RegisterNewItemIntoTheShop("BellMace", (itemName) =>
-    {
-
-    });
-    */
     public static void LoadItems()
     {
         ModManager.RegisterNewItemIntoTheShop("BellMace", (itemName) =>
@@ -30,7 +24,6 @@ public class LoadWeddingItems
                 .WithWeaponProperties(new WeaponProperties("1d6", DamageKind.Bludgeoning).WithAdditionalDamage("1", DamageKind.Sonic))
                 .WithModificationPlusOne()
                 .WithItemGreaterGroup(ItemGreaterGroup.MeleeMagicWeapons);
-            //return Items.CreateNew(BellMace);
         });
     }
 }
